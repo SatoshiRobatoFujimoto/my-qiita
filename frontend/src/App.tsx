@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route, useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
@@ -22,7 +23,10 @@ interface DraftData {
 
 const API_BASE_URL = 'http://localhost:3001/api'
 
-function App() {
+// メインのエディタコンポーネント
+function Editor() {
+  const { draftId } = useParams<{ draftId?: string }>()
+  const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState('')
   const [markdown, setMarkdown] = useState(`# タイトル
@@ -73,28 +77,33 @@ const code = "コードブロック";
     }
   }
 
-  // ページ読み込み時に下書きを復元
+  // URLパラメータから下書きIDを取得して読み込む
   useEffect(() => {
-    const loadDraft = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/drafts`)
-        if (response.ok) {
-          const draft: DraftData | null = await response.json()
-          if (draft) {
-            setTitle(draft.title || '')
-            setTags(draft.tags || '')
-            setMarkdown(draft.markdown || '')
-            setIsPrivate(draft.isPrivate || false)
-            setCurrentDraftId(draft.id || null)
+    if (draftId) {
+      handleLoadDraft(draftId)
+    } else {
+      // 下書きIDがない場合は最新の下書きを読み込む
+      const loadDraft = async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/drafts`)
+          if (response.ok) {
+            const draft: DraftData | null = await response.json()
+            if (draft) {
+              setTitle(draft.title || '')
+              setTags(draft.tags || '')
+              setMarkdown(draft.markdown || '')
+              setIsPrivate(draft.isPrivate || false)
+              setCurrentDraftId(draft.id || null)
+            }
           }
+        } catch (err) {
+          console.error('下書きの読み込みに失敗しました:', err)
         }
-      } catch (err) {
-        console.error('下書きの読み込みに失敗しました:', err)
       }
+      loadDraft()
     }
-    loadDraft()
     loadDraftsList()
-  }, [])
+  }, [draftId])
 
   // 下書きを読み込む
   const handleLoadDraft = async (draftId: string) => {
@@ -107,6 +116,12 @@ const code = "コードブロック";
         setMarkdown(draft.markdown || '')
         setIsPrivate(draft.isPrivate || false)
         setCurrentDraftId(draft.id || null)
+        
+        // URLを更新（履歴に追加しない）
+        if (draft.id) {
+          window.history.replaceState(null, '', `/${draft.id}`)
+        }
+        
         setSuccess('下書きを読み込みました')
         setTimeout(() => {
           setSuccess(null)
@@ -116,6 +131,11 @@ const code = "コードブロック";
       setError('下書きの読み込みに失敗しました')
       console.error('下書き読み込みエラー:', err)
     }
+  }
+
+  // サイドメニューで下書きをクリックしたとき
+  const handleDraftClick = (draftId: string) => {
+    navigate(`/${draftId}`)
   }
 
   // 下書きを削除する関数（サイドメニューから）
@@ -141,6 +161,7 @@ const code = "コードブロック";
         setMarkdown('')
         setIsPrivate(false)
         setCurrentDraftId(null)
+        navigate('/')
       }
 
       // 一覧を再取得
@@ -193,6 +214,8 @@ const code = "コードブロック";
       const result = await response.json()
       if (result.id) {
         setCurrentDraftId(result.id)
+        // URLを更新
+        navigate(`/${result.id}`)
       }
       setDraftSaved(true)
       setTimeout(() => {
@@ -234,6 +257,7 @@ const code = "コードブロック";
     setMarkdown('')
     setIsPrivate(false)
     setCurrentDraftId(null)
+    navigate('/')
     setSuccess('下書きを削除しました')
     setTimeout(() => {
       setSuccess(null)
@@ -304,6 +328,9 @@ const code = "コードブロック";
       // 一覧を再取得
       await loadDraftsList()
       
+      // ルートに戻る
+      navigate('/')
+      
       // 成功後、5秒後にメッセージを消す
       setTimeout(() => {
         setSuccess(null)
@@ -354,6 +381,7 @@ const code = "コードブロック";
 `)
     setIsPrivate(false)
     setCurrentDraftId(null)
+    navigate('/')
     setSuccess('新規記事を作成しました')
     setTimeout(() => {
       setSuccess(null)
@@ -463,7 +491,7 @@ const code = "コードブロック";
                   <div
                     key={draft.id}
                     className={`draft-item ${currentDraftId === draft.id ? 'active' : ''}`}
-                    onClick={() => draft.id && handleLoadDraft(draft.id)}
+                    onClick={() => draft.id && handleDraftClick(draft.id)}
                   >
                     <div className="draft-item-header">
                       <h3 className="draft-title">
@@ -539,6 +567,16 @@ const code = "コードブロック";
       </div>
       </div>
     </div>
+  )
+}
+
+// ルーティング設定
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Editor />} />
+      <Route path="/:draftId" element={<Editor />} />
+    </Routes>
   )
 }
 
