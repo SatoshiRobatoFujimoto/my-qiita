@@ -344,16 +344,14 @@ const code = "コードブロック";
   }
 
   // 新規記事を作成
-  const handleNewArticle = () => {
+  const handleNewArticle = async () => {
     if (title || tags || markdown || currentDraftId) {
       if (!confirm('現在編集中の内容を破棄して新規記事を作成しますか？')) {
         return
       }
     }
     
-    setTitle('')
-    setTags('')
-    setMarkdown(`# タイトル
+    const initialMarkdown = `# タイトル
 
 ## 見出し2
 
@@ -378,14 +376,52 @@ const code = "コードブロック";
 | テーブル | サンプル |
 |---------|---------|
 | セル1   | セル2   |
-`)
-    setIsPrivate(false)
-    setCurrentDraftId(null)
-    navigate('/')
-    setSuccess('新規記事を作成しました')
-    setTimeout(() => {
-      setSuccess(null)
-    }, 3000)
+`
+
+    // 空の下書きを作成
+    const draftData: DraftData = {
+      title: '',
+      tags: '',
+      markdown: initialMarkdown,
+      isPrivate: false,
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/drafts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(draftData),
+      })
+
+      if (!response.ok) {
+        throw new Error('新規下書きの作成に失敗しました')
+      }
+
+      const result = await response.json()
+      if (result.id) {
+        setTitle('')
+        setTags('')
+        setMarkdown(initialMarkdown)
+        setIsPrivate(false)
+        setCurrentDraftId(result.id)
+        
+        // 新規作成した下書きのURLに遷移
+        navigate(`/${result.id}`)
+        
+        // 一覧を再取得
+        await loadDraftsList()
+        
+        setSuccess('新規記事を作成しました')
+        setTimeout(() => {
+          setSuccess(null)
+        }, 3000)
+      }
+    } catch (err) {
+      setError('新規記事の作成に失敗しました')
+      console.error('新規記事作成エラー:', err)
+    }
   }
 
   // 日付をフォーマット
