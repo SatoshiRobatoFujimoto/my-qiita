@@ -63,6 +63,8 @@ const code = "コードブロック";
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<DraftData[]>([])
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [editorWidth, setEditorWidth] = useState(50) // パーセンテージで管理
+  const [isResizing, setIsResizing] = useState(false)
 
   // 下書き一覧を取得
   const loadDraftsList = async () => {
@@ -424,6 +426,47 @@ const code = "コードブロック";
     }
   }
 
+  // リサイズ開始
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }
+
+  // リサイズ中
+  useEffect(() => {
+    const handleResize = (e: MouseEvent) => {
+      if (!isResizing) return
+
+      const editorContainer = document.querySelector('.editor-container') as HTMLElement
+      if (!editorContainer) return
+
+      const containerRect = editorContainer.getBoundingClientRect()
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100
+
+      // 最小幅と最大幅を制限（20%〜80%）
+      const clampedWidth = Math.max(20, Math.min(80, newWidth))
+      setEditorWidth(clampedWidth)
+    }
+
+    const handleResizeEnd = () => {
+      setIsResizing(false)
+    }
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResize)
+      document.addEventListener('mouseup', handleResizeEnd)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleResize)
+      document.removeEventListener('mouseup', handleResizeEnd)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing])
+
   // 日付をフォーマット
   const formatDate = (dateString?: string) => {
     if (!dateString) return ''
@@ -566,7 +609,10 @@ const code = "コードブロック";
         )}
 
         <div className="editor-container">
-        <div className="editor-panel">
+        <div 
+          className="editor-panel"
+          style={{ width: `${editorWidth}%` }}
+        >
           <div className="panel-header">記事情報</div>
           <div className="article-form">
             <input
@@ -592,7 +638,14 @@ const code = "コードブロック";
             placeholder="マークダウンを記入してください..."
           />
         </div>
-        <div className="preview-panel">
+        <div
+          className="resizer"
+          onMouseDown={handleResizeStart}
+        />
+        <div 
+          className="preview-panel"
+          style={{ width: `${100 - editorWidth}%` }}
+        >
           <div className="panel-header">プレビュー</div>
           <div className="markdown-preview">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
