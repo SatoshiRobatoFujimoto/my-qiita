@@ -426,19 +426,21 @@ const code = "コードブロック";
         </div>
       </header>
 
-      {error && (
-        <div className="alert alert-error">
-          <span>❌ {error}</span>
-          <button onClick={() => setError(null)}>×</button>
-        </div>
-      )}
+      <div className="alert-container">
+        {error && (
+          <div className="alert alert-error">
+            <span>❌ {error}</span>
+            <button onClick={() => setError(null)}>×</button>
+          </div>
+        )}
 
-      {success && (
-        <div className="alert alert-success">
-          <span>✅ {success}</span>
-          <button onClick={() => setSuccess(null)}>×</button>
-        </div>
-      )}
+        {success && (
+          <div className="alert alert-success">
+            <span>✅ {success}</span>
+            <button onClick={() => setSuccess(null)}>×</button>
+          </div>
+        )}
+      </div>
 
       <div className="main-content">
         {isSidebarOpen && (
