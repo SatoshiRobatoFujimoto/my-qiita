@@ -57,6 +57,21 @@ const code = "コードブロック";
   const [success, setSuccess] = useState<string | null>(null)
   const [draftSaved, setDraftSaved] = useState(false)
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
+  const [drafts, setDrafts] = useState<DraftData[]>([])
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+
+  // 下書き一覧を取得
+  const loadDraftsList = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/drafts/list`)
+      if (response.ok) {
+        const draftsList: DraftData[] = await response.json()
+        setDrafts(draftsList)
+      }
+    } catch (err) {
+      console.error('下書き一覧の取得に失敗しました:', err)
+    }
+  }
 
   // ページ読み込み時に下書きを復元
   useEffect(() => {
@@ -78,7 +93,67 @@ const code = "コードブロック";
       }
     }
     loadDraft()
+    loadDraftsList()
   }, [])
+
+  // 下書きを読み込む
+  const handleLoadDraft = async (draftId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/drafts/${draftId}`)
+      if (response.ok) {
+        const draft: DraftData = await response.json()
+        setTitle(draft.title || '')
+        setTags(draft.tags || '')
+        setMarkdown(draft.markdown || '')
+        setIsPrivate(draft.isPrivate || false)
+        setCurrentDraftId(draft.id || null)
+        setSuccess('下書きを読み込みました')
+        setTimeout(() => {
+          setSuccess(null)
+        }, 3000)
+      }
+    } catch (err) {
+      setError('下書きの読み込みに失敗しました')
+      console.error('下書き読み込みエラー:', err)
+    }
+  }
+
+  // 下書きを削除する関数（サイドメニューから）
+  const handleDeleteDraft = async (draftId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('この下書きを削除しますか？')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/drafts/${draftId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('下書きの削除に失敗しました')
+      }
+
+      // 削除した下書きが現在編集中の下書きの場合は、エディタをクリア
+      if (currentDraftId === draftId) {
+        setTitle('')
+        setTags('')
+        setMarkdown('')
+        setIsPrivate(false)
+        setCurrentDraftId(null)
+      }
+
+      // 一覧を再取得
+      await loadDraftsList()
+      setSuccess('下書きを削除しました')
+      setTimeout(() => {
+        setSuccess(null)
+      }, 3000)
+    } catch (err) {
+      setError('下書きの削除に失敗しました')
+      console.error('下書き削除エラー:', err)
+    }
+  }
 
   // 下書きを保存する関数
   const handleSaveDraft = async () => {
@@ -123,6 +198,9 @@ const code = "コードブロック";
       setTimeout(() => {
         setDraftSaved(false)
       }, 2000)
+      
+      // 一覧を再取得
+      await loadDraftsList()
     } catch (err) {
       setError('下書きの保存に失敗しました')
       console.error('下書き保存エラー:', err)
@@ -160,6 +238,9 @@ const code = "コードブロック";
     setTimeout(() => {
       setSuccess(null)
     }, 3000)
+    
+    // 一覧を再取得
+    await loadDraftsList()
   }
 
   const handlePublish = async () => {
@@ -220,6 +301,9 @@ const code = "コードブロック";
         }
       }
       
+      // 一覧を再取得
+      await loadDraftsList()
+      
       // 成功後、5秒後にメッセージを消す
       setTimeout(() => {
         setSuccess(null)
@@ -232,11 +316,84 @@ const code = "コードブロック";
     }
   }
 
+  // 新規記事を作成
+  const handleNewArticle = () => {
+    if (title || tags || markdown || currentDraftId) {
+      if (!confirm('現在編集中の内容を破棄して新規記事を作成しますか？')) {
+        return
+      }
+    }
+    
+    setTitle('')
+    setTags('')
+    setMarkdown(`# タイトル
+
+## 見出し2
+
+### 見出し3
+
+ここにマークダウンを記入してください。
+
+- リスト項目1
+- リスト項目2
+- リスト項目3
+
+**太字** や *イタリック* も使えます。
+
+\`\`\`typescript
+const code = "コードブロック";
+\`\`\`
+
+> 引用文
+
+[リンク](https://example.com)
+
+| テーブル | サンプル |
+|---------|---------|
+| セル1   | セル2   |
+`)
+    setIsPrivate(false)
+    setCurrentDraftId(null)
+    setSuccess('新規記事を作成しました')
+    setTimeout(() => {
+      setSuccess(null)
+    }, 3000)
+  }
+
+  // 日付をフォーマット
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    return date.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>Qiita 記事作成</h1>
+        <div className="header-left">
+          <button
+            className="sidebar-toggle"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            title={isSidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く'}
+          >
+            {isSidebarOpen ? '←' : '→'}
+          </button>
+          <h1>Qiita 記事作成</h1>
+        </div>
         <div className="header-actions">
+          <button
+            className="new-article-button"
+            onClick={handleNewArticle}
+            title="新規記事を作成"
+          >
+            + 新規作成
+          </button>
           <button
             className="save-draft-button"
             onClick={handleSaveDraft}
@@ -283,7 +440,66 @@ const code = "コードブロック";
         </div>
       )}
 
-      <div className="editor-container">
+      <div className="main-content">
+        {isSidebarOpen && (
+          <aside className="sidebar">
+            <div className="sidebar-header">
+              <h2>下書き一覧</h2>
+              <button
+                className="refresh-button"
+                onClick={loadDraftsList}
+                title="一覧を更新"
+              >
+                🔄
+              </button>
+            </div>
+            <div className="drafts-list">
+              {drafts.length === 0 ? (
+                <div className="drafts-empty">下書きがありません</div>
+              ) : (
+                drafts.map((draft) => (
+                  <div
+                    key={draft.id}
+                    className={`draft-item ${currentDraftId === draft.id ? 'active' : ''}`}
+                    onClick={() => draft.id && handleLoadDraft(draft.id)}
+                  >
+                    <div className="draft-item-header">
+                      <h3 className="draft-title">
+                        {draft.title || '(タイトルなし)'}
+                      </h3>
+                      <button
+                        className="draft-delete-button"
+                        onClick={(e) => draft.id && handleDeleteDraft(draft.id, e)}
+                        title="削除"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="draft-meta">
+                      <span className="draft-date">
+                        {formatDate(draft.updatedAt || draft.createdAt)}
+                      </span>
+                      {draft.isPrivate && (
+                        <span className="draft-private">非公開</span>
+                      )}
+                    </div>
+                    {draft.tags && (
+                      <div className="draft-tags">
+                        {draft.tags.split(',').slice(0, 3).map((tag, idx) => (
+                          <span key={idx} className="draft-tag">
+                            {tag.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </aside>
+        )}
+
+        <div className="editor-container">
         <div className="editor-panel">
           <div className="panel-header">記事情報</div>
           <div className="article-form">
@@ -318,6 +534,7 @@ const code = "コードブロック";
             </ReactMarkdown>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )
