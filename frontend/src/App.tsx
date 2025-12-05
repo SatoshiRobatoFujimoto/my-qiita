@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
@@ -9,6 +9,18 @@ interface ArticleData {
   tags: Array<{ name: string; versions: string[] }>
   private: boolean
 }
+
+interface DraftData {
+  id?: string
+  title: string
+  tags: string
+  markdown: string
+  isPrivate: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+const API_BASE_URL = 'http://localhost:3001/api'
 
 function App() {
   const [title, setTitle] = useState('')
@@ -43,6 +55,112 @@ const code = "コードブロック";
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [draftSaved, setDraftSaved] = useState(false)
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
+
+  // ページ読み込み時に下書きを復元
+  useEffect(() => {
+    const loadDraft = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/drafts`)
+        if (response.ok) {
+          const draft: DraftData | null = await response.json()
+          if (draft) {
+            setTitle(draft.title || '')
+            setTags(draft.tags || '')
+            setMarkdown(draft.markdown || '')
+            setIsPrivate(draft.isPrivate || false)
+            setCurrentDraftId(draft.id || null)
+          }
+        }
+      } catch (err) {
+        console.error('下書きの読み込みに失敗しました:', err)
+      }
+    }
+    loadDraft()
+  }, [])
+
+  // 下書きを保存する関数
+  const handleSaveDraft = async () => {
+    const draftData: DraftData = {
+      title,
+      tags,
+      markdown,
+      isPrivate,
+    }
+
+    try {
+      let response
+      if (currentDraftId) {
+        // 既存の下書きを更新
+        response = await fetch(`${API_BASE_URL}/drafts/${currentDraftId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(draftData),
+        })
+      } else {
+        // 新しい下書きを作成
+        response = await fetch(`${API_BASE_URL}/drafts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(draftData),
+        })
+      }
+
+      if (!response.ok) {
+        throw new Error('下書きの保存に失敗しました')
+      }
+
+      const result = await response.json()
+      if (result.id) {
+        setCurrentDraftId(result.id)
+      }
+      setDraftSaved(true)
+      setTimeout(() => {
+        setDraftSaved(false)
+      }, 2000)
+    } catch (err) {
+      setError('下書きの保存に失敗しました')
+      console.error('下書き保存エラー:', err)
+    }
+  }
+
+  // 下書きを削除する関数
+  const handleClearDraft = async () => {
+    if (!confirm('下書きを削除しますか？')) {
+      return
+    }
+
+    if (currentDraftId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/drafts/${currentDraftId}`, {
+          method: 'DELETE',
+        })
+
+        if (!response.ok) {
+          throw new Error('下書きの削除に失敗しました')
+        }
+      } catch (err) {
+        setError('下書きの削除に失敗しました')
+        console.error('下書き削除エラー:', err)
+        return
+      }
+    }
+
+    setTitle('')
+    setTags('')
+    setMarkdown('')
+    setIsPrivate(false)
+    setCurrentDraftId(null)
+    setSuccess('下書きを削除しました')
+    setTimeout(() => {
+      setSuccess(null)
+    }, 3000)
+  }
 
   const handlePublish = async () => {
     // バリデーション
@@ -74,7 +192,7 @@ const code = "コードブロック";
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/articles', {
+      const response = await fetch(`${API_BASE_URL}/articles`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,6 +207,18 @@ const code = "コードブロック";
 
       const result = await response.json()
       setSuccess(`記事を投稿しました！URL: ${result.url}`)
+      
+      // 投稿成功後、下書きを削除
+      if (currentDraftId) {
+        try {
+          await fetch(`${API_BASE_URL}/drafts/${currentDraftId}`, {
+            method: 'DELETE',
+          })
+          setCurrentDraftId(null)
+        } catch (err) {
+          console.error('下書き削除エラー:', err)
+        }
+      }
       
       // 成功後、5秒後にメッセージを消す
       setTimeout(() => {
@@ -107,6 +237,20 @@ const code = "コードブロック";
       <header className="app-header">
         <h1>Qiita 記事作成</h1>
         <div className="header-actions">
+          <button
+            className="save-draft-button"
+            onClick={handleSaveDraft}
+            title="下書きを保存"
+          >
+            {draftSaved ? '✓ 保存しました' : '下書き保存'}
+          </button>
+          <button
+            className="clear-draft-button"
+            onClick={handleClearDraft}
+            title="下書きを削除"
+          >
+            下書き削除
+          </button>
           <label className="private-checkbox">
             <input
               type="checkbox"

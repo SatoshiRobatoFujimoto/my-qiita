@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { articleRoutes } from './routes/articles.js'
+import { draftRoutes } from './routes/drafts.js'
 
 dotenv.config()
 
@@ -14,6 +15,7 @@ app.use(express.json())
 
 // ルーティング
 app.use('/api/articles', articleRoutes)
+app.use('/api/drafts', draftRoutes)
 
 // ヘルスチェック
 app.get('/api/health', (req, res) => {
